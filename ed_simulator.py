@@ -10,34 +10,36 @@ arrival_rate = st.number_input("Arrival Rate (λ)", min_value=0.1, value=1.0, st
 service_rate = st.number_input("Service Rate (μ)", min_value=0.1, value=1.0, step=0.1)
 sim_time = st.number_input("Simulation Duration (in seconds)", min_value=1, value=30)
 
-# We'll store our patients list in session state so that it persists between reruns
+# Store patients in session state so that data persists over reruns
 if "patients" not in st.session_state:
     st.session_state.patients = []
 
-# Placeholders for updating simulation information and table in real-time
+# Placeholders for real-time simulation status and table
 sim_status_placeholder = st.empty()
 table_placeholder = st.empty()
 
+# Placeholder for the sorted (priority-based) table display
+sorted_table_placeholder = st.empty()
+
 # Function to generate a new patient with whole number times
 def add_new_patient():
-    # For whole numbers, we use randint
-    # For inter_arrival, let’s assume a random value between 1 and 5 seconds:
+    # Generate inter_arrival as a whole number between 1 and 5 seconds
     inter_arrival = np.random.randint(1, 6)
     
-    # The arrival time is computed relative to the last patient (or 0 for first)
+    # Calculate arrival time relative to the last patient, or 0 for the first patient
     if st.session_state.patients:
         last_arrival = st.session_state.patients[-1]["arrival_time"]
     else:
         last_arrival = 0
     arrival_time = last_arrival + inter_arrival
     
-    # Service time, similarly, is a random whole number between 1 and 5 seconds
+    # Generate a whole number service time between 1 and 5 seconds
     service_time = np.random.randint(1, 6)
     
-    # Randomly assign priority (1 is highest, 3 is lowest)
+    # Random priority: 1 (highest), 2, or 3 (lowest)
     priority = int(np.random.choice([1, 2, 3]))
     
-    # Build a patient dictionary
+    # Create a new patient dictionary
     new_patient = {
         "id": len(st.session_state.patients) + 1,
         "inter_arrival": inter_arrival,
@@ -47,45 +49,67 @@ def add_new_patient():
     }
     st.session_state.patients.append(new_patient)
 
-# When the simulation starts, run the real-time simulation loop.
+# When the simulation starts, run the real-time simulation loop
 if st.button("Start Simulation"):
-    # Clear previous patient list if any
+    # Clear any previously generated patients
     st.session_state.patients = []
     
-    # Initialize timing
-    simulation_duration = int(sim_time)  # simulation duration in seconds (whole number)
+    # Clear previous sorted table if any.
+    sorted_table_placeholder.empty()
+    
+    # Initialize simulation timing variables
+    simulation_duration = int(sim_time)  # total simulation duration in seconds
     start_time = time.time()
     remaining = simulation_duration
 
-    # Run simulation in a loop until timer runs out
+    # Run simulation until the remaining time is 0
     while remaining > 0:
-        # Update the countdown timer (in seconds)
+        # Update elapsed time and compute remaining time
         current_time = time.time()
         elapsed = int(current_time - start_time)
         remaining = simulation_duration - elapsed
         
-        # With a fixed probability, add a new patient
-        # (You can adjust this probability or use your own arrival logic)
-        if np.random.random() < 0.5:  # 50% chance to add a patient at each iteration
+        # With a fixed probability, add a new patient (50% chance per iteration)
+        if np.random.random() < 0.5:
             add_new_patient()
         
-        # Update our placeholders:
+        # Update the simulation status (timer display)
         sim_status_placeholder.write(f"Time Remaining: {remaining} seconds")
-        # Use st.table which auto aligns headers. We build a list of lists for display.
+        
+        # Prepare table data from patients list for proper header alignment 
         if st.session_state.patients:
             table_data = [
                 [p["id"], p["inter_arrival"], p["arrival_time"], p["service_time"], p["priority"]]
                 for p in st.session_state.patients
             ]
-            # Define headers for clarity
             headers = ["ID", "Inter-Arrival", "Arrival Time", "Service Time", "Priority"]
-            # We create a new data structure (list of dicts) so the table shows headers correctly.
             table_dict = [dict(zip(headers, row)) for row in table_data]
             table_placeholder.table(table_dict)
         else:
             table_placeholder.write("No patients generated yet.")
         
-        # Sleep for 1 second to control the update rate (simulate the passing of time)
+        # Sleep for one second to simulate real time passing
         time.sleep(1)
     
+    # Indicate that the simulation has ended.
     sim_status_placeholder.write("Simulation Ended.")
+    
+    # --- New Part: Sorting the Data by Priority ---
+    # Sort patients first by priority (ascending: 1, 2, 3).  
+    # Optionally, sort by arrival time if priorities are equal.
+    sorted_patients = sorted(
+        st.session_state.patients,
+        key=lambda p: (p["priority"], p["arrival_time"])
+    )
+    
+    # Prepare sorted table data
+    sorted_table_data = [
+        [p["id"], p["inter_arrival"], p["arrival_time"], p["service_time"], p["priority"]]
+        for p in sorted_patients
+    ]
+    headers_sorted = ["ID", "Inter-Arrival", "Arrival Time", "Service Time", "Priority"]
+    sorted_table_dict = [dict(zip(headers_sorted, row)) for row in sorted_table_data]
+    
+    # Display the sorted table
+    sorted_table_placeholder.subheader("Patients Sorted by Priority")
+    sorted_table_placeholder.table(sorted_table_dict)
